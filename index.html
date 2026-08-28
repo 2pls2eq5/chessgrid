@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>ChessGrid Live</title>
+
+
+    <!-- ============================================================
+         chessboard.js CSS
+         ============================================================ -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+    >
+
+
+    <style>
+
+        body {
+
+            margin: 0;
+
+            padding: 30px;
+
+            background: #222;
+
+            color: white;
+
+            font-family: Arial, sans-serif;
+
+            text-align: center;
+
+        }
+
+
+        #board {
+
+            width: min(90vw, 600px);
+
+            margin: auto;
+
+        }
+
+
+        #status {
+
+            margin-top: 20px;
+
+            font-size: 18px;
+
+        }
+
+
+        #uci {
+
+            margin-top: 10px;
+
+            font-family: monospace;
+
+            font-size: 28px;
+
+            color: #00ff88;
+
+        }
+
+
+        button {
+
+            margin-top: 20px;
+
+            padding: 10px 20px;
+
+            font-size: 16px;
+
+            cursor: pointer;
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <h1>ChessGrid Live</h1>
+
+
+    <div id="board"></div>
+
+
+    <div id="status">
+
+        Connecting...
+
+    </div>
+
+
+    <div id="uci">
+
+        —
+
+    </div>
+
+
+    <button onclick="resetBoard()">
+
+        Reset
+
+    </button>
+
+
+
+    <!-- ============================================================
+         jQuery
+         ============================================================ -->
+
+    <script
+        src="https://code.jquery.com/jquery-3.7.1.min.js">
+    </script>
+
+
+    <!-- ============================================================
+         chessboard.js
+         ============================================================ -->
+
+    <script
+        src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js">
+    </script>
+
+
+
+    <script>
+
+
+        // ============================================================
+        // CHESSBOARD
+        // ============================================================
+
+        const board = Chessboard('board', {
+
+            position: 'start',
+
+            draggable: true,
+
+            pieceTheme:
+                'img/chesspieces/wikipedia/{piece}.png',
+
+
+            // ========================================================
+            // DRAG START
+            // ========================================================
+
+            onDragStart: function (
+                source,
+                piece
+            ) {
+
+                $('#status').text(
+
+                    'Dragging ' +
+                    piece +
+                    ' from ' +
+                    source
+
+                );
+
+            },
+
+
+            // ========================================================
+            // DROP
+            // ========================================================
+
+            onDrop: function (
+                source,
+                target
+            ) {
+
+                const uci =
+                    source + target;
+
+
+                $('#uci').text(
+                    uci
+                );
+
+
+                $('#status').text(
+                    'Move: ' + uci
+                );
+
+
+                console.log(
+                    'Browser move:',
+                    uci
+                );
+
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Browser drag is currently
+                 * only for visual POC.
+                 *
+                 * It does NOT send the move
+                 * to ESP32 yet.
+                 */
+
+
+                return undefined;
+
+            }
+
+        });
+
+
+
+        // ============================================================
+        // WEBSOCKET
+        // ============================================================
+
+        const ws = new WebSocket(
+
+            'ws://' +
+            window.location.hostname +
+            ':8765'
+
+        );
+
+
+        // ============================================================
+        // CONNECTED
+        // ============================================================
+
+        ws.onopen = function () {
+
+            console.log(
+                'WebSocket connected'
+            );
+
+
+            $('#status').text(
+                'WebSocket connected'
+            );
+
+        };
+
+
+
+        // ============================================================
+        // MESSAGE
+        // ============================================================
+
+ws.onmessage = function (event) {
+
+    const message = event.data.trim();
+
+    console.log("Received:", message);
+
+
+    // ========================================================
+    // RESET
+    // ========================================================
+
+    if (message === "RESET") {
+
+        board.start();
+
+        $("#uci").text("—");
+
+        $("#status").text(
+            "Board reset"
+        );
+
+        return;
+    }
+
+
+    // ========================================================
+    // FEN FROM SERVER
+    // ========================================================
+
+    if (message.startsWith("FEN ")) {
+
+        const fen =
+            message.substring(4);
+
+        board.position(
+            fen,
+            true
+        );
+
+        $("#status").text(
+            "Live"
+        );
+
+        return;
+    }
+
+
+    // ========================================================
+    // MOVE INFO
+    // ========================================================
+
+    if (message.startsWith("MOVE ")) {
+
+        const uci =
+            message.substring(5);
+
+        $("#uci").text(
+            uci
+        );
+
+        return;
+    }
+
+
+    // ========================================================
+    // ERROR
+    // ========================================================
+
+    if (message.startsWith("ERROR")) {
+
+        $("#status").text(
+            message
+        );
+
+        return;
+    }
+
+};
+
+
+
+        // ============================================================
+        // WEBSOCKET CLOSED
+        // ============================================================
+
+        ws.onclose = function () {
+
+            $('#status').text(
+                'WebSocket disconnected'
+            );
+
+        };
+
+
+
+        // ============================================================
+        // WEBSOCKET ERROR
+        // ============================================================
+
+        ws.onerror = function (
+            error
+        ) {
+
+            console.error(
+                'WebSocket error:',
+                error
+            );
+
+        };
+
+
+
+        // ============================================================
+        // RESET BUTTON
+        // ============================================================
+
+        function resetBoard() {
+
+            board.start();
+
+
+            $('#uci').text(
+                '—'
+            );
+
+
+            $('#status').text(
+                'Board reset'
+            );
+
+        }
+
+
+
+        // ============================================================
+        // RESPONSIVE
+        // ============================================================
+
+        window.addEventListener(
+
+            'resize',
+
+            function () {
+
+                board.resize();
+
+            }
+
+        );
+
+
+    </script>
+
+
+</body>
+
+</html>
