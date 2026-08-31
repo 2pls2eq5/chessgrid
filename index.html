@@ -230,13 +230,17 @@
         // WEBSOCKET
         // ============================================================
 
-        const ws = new WebSocket(
+const wsProtocol =
+    window.location.protocol === 'https:'
+        ? 'wss:'
+        : 'ws:';
 
-            'ws://' +
-            window.location.hostname +
-            ':8765'
-
-        );
+const ws = new WebSocket(
+    wsProtocol +
+    '//' +
+    window.location.host +
+    '/ws'
+);
 
 
         // ============================================================
