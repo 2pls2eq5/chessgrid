@@ -13,6 +13,15 @@ const chess = new Chess();
 
 
 // ============================================================
+// CONNECTION REQUESTS
+// ============================================================
+
+const pendingConnections = new Map();
+
+const approvedConnections = new Map();
+
+
+// ============================================================
 // HTTP SERVER
 // ============================================================
 
@@ -21,32 +30,59 @@ const httpServer = http.createServer((req, res) => {
     let filePath;
 
     if (req.url === "/") {
-        filePath = path.join(__dirname, "index.html");
+
+        filePath = path.join(
+            __dirname,
+            "index.html"
+        );
+
+    } else if (req.url === "/admin") {
+
+        filePath = path.join(
+            __dirname,
+            "admin.html"
+        );
+
     } else {
-        filePath = path.join(__dirname, req.url);
+
+        filePath = path.join(
+            __dirname,
+            req.url
+        );
     }
+
 
     fs.readFile(filePath, (err, data) => {
 
         if (err) {
+
             res.writeHead(404);
             res.end("Not found");
+
             return;
         }
 
+
         res.writeHead(200);
+
         res.end(data);
+
     });
-});
-
-
-httpServer.listen(8000, "0.0.0.0", () => {
-
-    console.log(
-        "HTTP server: http://localhost:8000"
-    );
 
 });
+
+
+httpServer.listen(
+    8000,
+    "0.0.0.0",
+    () => {
+
+        console.log(
+            "HTTP server running on port 8000"
+        );
+
+    }
+);
 
 
 // ============================================================
@@ -65,12 +101,14 @@ wss.on("connection", (ws) => {
     );
 
 
-    // Send current position immediately
+    ws.deviceId = null;
+    ws.authorized = false;
+    ws.isAdmin = false;
 
-    ws.send(
-        "FEN " + chess.fen()
-    );
 
+    // ========================================================
+    // MESSAGE
+    // ========================================================
 
     ws.on("message", (data) => {
 
@@ -85,6 +123,258 @@ wss.on("connection", (ws) => {
 
 
         // ====================================================
+        // ADMIN
+        // ====================================================
+
+        if (message === "ADMIN") {
+
+            ws.isAdmin = true;
+
+            ws.send(
+                "ADMIN_CONNECTED"
+            );
+
+            sendPendingList(ws);
+
+            return;
+        }
+
+
+        // ====================================================
+        // ESP32 HELLO
+        // ====================================================
+
+        if (
+            message.startsWith("HELLO ")
+        ) {
+
+            const deviceId =
+                message.substring(6).trim();
+
+
+            if (
+                deviceId.length === 0
+            ) {
+
+                ws.send(
+                    "ERROR INVALID_ID"
+                );
+
+                return;
+            }
+
+
+            ws.deviceId =
+                deviceId;
+
+
+            ws.authorized =
+                false;
+
+
+            pendingConnections.set(
+                deviceId,
+                ws
+            );
+
+
+            console.log();
+            console.log(
+                "================================"
+            );
+
+            console.log(
+                "CONNECTION REQUEST"
+            );
+
+            console.log(
+                "Device:",
+                deviceId
+            );
+
+            console.log(
+                "================================"
+            );
+
+
+            ws.send(
+                "PENDING"
+            );
+
+
+            notifyAdmins(
+                "REQUEST " + deviceId
+            );
+
+
+            return;
+        }
+
+
+        // ====================================================
+        // ADMIN ACCEPT
+        // ====================================================
+
+        if (
+            message.startsWith("ACCEPT ")
+        ) {
+
+            if (!ws.isAdmin) {
+
+                ws.send(
+                    "ERROR NOT_ADMIN"
+                );
+
+                return;
+            }
+
+
+            const deviceId =
+                message.substring(7).trim();
+
+
+            const device =
+                pendingConnections.get(
+                    deviceId
+                );
+
+
+            if (!device) {
+
+                ws.send(
+                    "ERROR DEVICE_NOT_FOUND " +
+                    deviceId
+                );
+
+                return;
+            }
+
+
+            pendingConnections.delete(
+                deviceId
+            );
+
+
+            device.authorized =
+                true;
+
+
+            approvedConnections.set(
+                deviceId,
+                device
+            );
+
+
+            device.send(
+                "ACCEPTED"
+            );
+
+
+            device.send(
+                "FEN " + chess.fen()
+            );
+
+
+            ws.send(
+                "ACCEPTED " + deviceId
+            );
+
+
+            console.log(
+                "Device accepted:",
+                deviceId
+            );
+
+
+            return;
+        }
+
+
+        // ====================================================
+        // ADMIN REJECT
+        // ====================================================
+
+        if (
+            message.startsWith("REJECT ")
+        ) {
+
+            if (!ws.isAdmin) {
+
+                ws.send(
+                    "ERROR NOT_ADMIN"
+                );
+
+                return;
+            }
+
+
+            const deviceId =
+                message.substring(7).trim();
+
+
+            const device =
+                pendingConnections.get(
+                    deviceId
+                );
+
+
+            if (!device) {
+
+                ws.send(
+                    "ERROR DEVICE_NOT_FOUND " +
+                    deviceId
+                );
+
+                return;
+            }
+
+
+            pendingConnections.delete(
+                deviceId
+            );
+
+
+            device.send(
+                "REJECTED"
+            );
+
+
+            device.close();
+
+
+            ws.send(
+                "REJECTED " + deviceId
+            );
+
+
+            console.log(
+                "Device rejected:",
+                deviceId
+            );
+
+
+            return;
+        }
+
+
+        // ====================================================
+        // EVERYTHING BELOW REQUIRES AUTHORIZATION
+        // ====================================================
+
+        if (
+            !ws.authorized
+        ) {
+
+            console.log(
+                "Ignoring unauthorized message:",
+                message
+            );
+
+            return;
+        }
+
+
+        // ====================================================
         // RESET
         // ====================================================
 
@@ -92,13 +382,16 @@ wss.on("connection", (ws) => {
 
             chess.reset();
 
+
             broadcast(
                 "RESET"
             );
 
+
             broadcast(
                 "FEN " + chess.fen()
             );
+
 
             return;
         }
@@ -109,18 +402,26 @@ wss.on("connection", (ws) => {
         // ====================================================
 
         if (
-            /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(message)
+            /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(
+                message
+            )
         ) {
 
             try {
 
-                // Convert UCI to chess.js move
-
                 const from =
-                    message.substring(0, 2);
+                    message.substring(
+                        0,
+                        2
+                    );
+
 
                 const to =
-                    message.substring(2, 4);
+                    message.substring(
+                        2,
+                        4
+                    );
+
 
                 const promotion =
                     message.length === 5
@@ -128,7 +429,7 @@ wss.on("connection", (ws) => {
                         : undefined;
 
 
-                const move = chess.move({
+                chess.move({
 
                     from: from,
 
@@ -147,14 +448,10 @@ wss.on("connection", (ws) => {
                 );
 
 
-                // Send the resulting FEN
-
                 broadcast(
                     "FEN " + chess.fen()
                 );
 
-
-                // Also send UCI for display
 
                 broadcast(
                     "MOVE " + message
@@ -170,7 +467,8 @@ wss.on("connection", (ws) => {
 
 
                 broadcast(
-                    "ERROR ILLEGAL " + message
+                    "ERROR ILLEGAL " +
+                    message
                 );
             }
 
@@ -187,15 +485,84 @@ wss.on("connection", (ws) => {
     });
 
 
+    // ========================================================
+    // CLOSE
+    // ========================================================
+
     ws.on("close", () => {
 
         console.log(
             "WebSocket client disconnected"
         );
 
+
+        if (ws.deviceId) {
+
+            pendingConnections.delete(
+                ws.deviceId
+            );
+
+
+            approvedConnections.delete(
+                ws.deviceId
+            );
+
+
+            notifyAdmins(
+                "DISCONNECTED " +
+                ws.deviceId
+            );
+        }
+
     });
 
 });
+
+
+// ============================================================
+// SEND PENDING LIST
+// ============================================================
+
+function sendPendingList(ws) {
+
+    pendingConnections.forEach(
+        (device, deviceId) => {
+
+            ws.send(
+                "REQUEST " + deviceId
+            );
+
+        }
+    );
+
+}
+
+
+// ============================================================
+// NOTIFY ADMINS
+// ============================================================
+
+function notifyAdmins(message) {
+
+    wss.clients.forEach(
+        (client) => {
+
+            if (
+                client.isAdmin &&
+                client.readyState ===
+                    WebSocket.OPEN
+            ) {
+
+                client.send(
+                    message
+                );
+
+            }
+
+        }
+    );
+
+}
 
 
 // ============================================================
@@ -204,16 +571,22 @@ wss.on("connection", (ws) => {
 
 function broadcast(message) {
 
-    wss.clients.forEach((client) => {
+    wss.clients.forEach(
+        (client) => {
 
-        if (
-            client.readyState === WebSocket.OPEN
-        ) {
+            if (
+                client.authorized &&
+                client.readyState ===
+                    WebSocket.OPEN
+            ) {
 
-            client.send(message);
+                client.send(
+                    message
+                );
+
+            }
 
         }
-
-    });
+    );
 
 }
