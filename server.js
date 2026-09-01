@@ -478,7 +478,13 @@ wss.on("connection", (ws) => {
                     "| Device:",
                     ws.deviceId
                 );
+broadcastToBrowsers(
+    "FEN " + ws.game.fen()
+);
 
+broadcastToBrowsers(
+    "MOVE " + message
+);
             } catch (error) {
 
                 console.log(
@@ -580,6 +586,27 @@ function notifyAdmins(message) {
                 client.send(
                     message
                 );
+
+            }
+
+        }
+    );
+
+}
+
+function broadcastToBrowsers(message) {
+
+    wss.clients.forEach(
+        (client) => {
+
+            if (
+                !client.isAdmin &&
+                !client.deviceId &&
+                client.readyState ===
+                    WebSocket.OPEN
+            ) {
+
+                client.send(message);
 
             }
 
