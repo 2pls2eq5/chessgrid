@@ -411,12 +411,6 @@ wss.on("connection", (ws) => {
 
             ws.game.reset();
 
-
-            broadcastToDevice(
-                ws,
-                "RESET"
-            );
-
             console.log(
                 "Game reset:",
                 ws.deviceId
