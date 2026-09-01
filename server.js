@@ -478,18 +478,6 @@ wss.on("connection", (ws) => {
                     "| Device:",
                     ws.deviceId
                 );
-                
-
-                // =================================================
-                // SEND MOVE
-                // =================================================
-
-                broadcastToDevice(
-                    ws,
-                    "MOVE " +
-                    message
-                );
-
 
             } catch (error) {
 
@@ -498,13 +486,6 @@ wss.on("connection", (ws) => {
                     message,
                     "| Device:",
                     ws.deviceId
-                );
-
-
-                broadcastToDevice(
-                    ws,
-                    "ERROR ILLEGAL " +
-                    message
                 );
 
             }
