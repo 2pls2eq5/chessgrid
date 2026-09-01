@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Chessnuts Admin</title>
+
+<style>
+
+body {
+
+    margin: 0;
+
+    padding: 30px;
+
+    background: #111;
+
+    color: white;
+
+    font-family: Arial, sans-serif;
+
+}
+
+.container {
+
+    max-width: 600px;
+
+    margin: auto;
+
+}
+
+.request {
+
+    background: #222;
+
+    padding: 20px;
+
+    margin-top: 15px;
+
+    border-radius: 12px;
+
+}
+
+.device {
+
+    font-size: 24px;
+
+    margin-bottom: 15px;
+
+}
+
+button {
+
+    padding: 12px 25px;
+
+    margin-right: 10px;
+
+    font-size: 16px;
+
+    cursor: pointer;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+<h1>Chessnuts Admin</h1>
+
+<h2>Connection Requests</h2>
+
+<div id="requests"></div>
+
+</div>
+
+
+<script>
+
+const ws = new WebSocket(
+
+    'ws://' +
+    window.location.hostname +
+    ':8765'
+
+);
+
+
+const requests =
+    document.getElementById(
+        'requests'
+    );
+
+
+ws.onopen = function() {
+
+    console.log(
+        "Admin connected"
+    );
+
+
+    ws.send(
+        "ADMIN"
+    );
+
+};
+
+
+ws.onmessage = function(event) {
+
+    const message =
+        event.data.trim();
+
+
+    console.log(
+        "Received:",
+        message
+    );
+
+
+    if (
+        message.startsWith(
+            "REQUEST "
+        )
+    ) {
+
+        const deviceId =
+            message.substring(8);
+
+
+        addRequest(
+            deviceId
+        );
+
+    }
+
+
+    if (
+        message.startsWith(
+            "DISCONNECTED "
+        )
+    ) {
+
+        const deviceId =
+            message.substring(13);
+
+
+        removeRequest(
+            deviceId
+        );
+
+    }
+
+};
+
+
+function addRequest(
+    deviceId
+) {
+
+    if (
+        document.getElementById(
+            "request-" + deviceId
+        )
+    ) {
+
+        return;
+    }
+
+
+    const div =
+        document.createElement(
+            "div"
+        );
+
+
+    div.className =
+        "request";
+
+
+    div.id =
+        "request-" + deviceId;
+
+
+    div.innerHTML = `
+
+        <div class="device">
+            ${deviceId}
+        </div>
+
+        <button
+            onclick="acceptDevice('${deviceId}')"
+        >
+            YES
+        </button>
+
+        <button
+            onclick="rejectDevice('${deviceId}')"
+        >
+            NO
+        </button>
+
+    `;
+
+
+    requests.appendChild(
+        div
+    );
+
+}
+
+
+function removeRequest(
+    deviceId
+) {
+
+    const element =
+        document.getElementById(
+            "request-" + deviceId
+        );
+
+
+    if (element) {
+
+        element.remove();
+
+    }
+
+}
+
+
+function acceptDevice(
+    deviceId
+) {
+
+    ws.send(
+        "ACCEPT " + deviceId
+    );
+
+
+    removeRequest(
+        deviceId
+    );
+
+}
+
+
+function rejectDevice(
+    deviceId
+) {
+
+    ws.send(
+        "REJECT " + deviceId
+    );
+
+
+    removeRequest(
+        deviceId
+    );
+
+}
+
+</script>
+
+
+</body>
+
+</html>
