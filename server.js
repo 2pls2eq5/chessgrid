@@ -417,14 +417,6 @@ wss.on("connection", (ws) => {
                 "RESET"
             );
 
-
-            broadcastToDevice(
-                ws,
-                "FEN " +
-                ws.game.fen()
-            );
-
-
             console.log(
                 "Game reset:",
                 ws.deviceId
@@ -492,18 +484,7 @@ wss.on("connection", (ws) => {
                     "| Device:",
                     ws.deviceId
                 );
-
-
-                // =================================================
-                // SEND NEW POSITION
-                // =================================================
-
-                broadcastToDevice(
-                    ws,
-                    "FEN " +
-                    ws.game.fen()
-                );
-
+                
 
                 // =================================================
                 // SEND MOVE
