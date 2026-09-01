@@ -416,7 +416,8 @@ wss.on("connection", (ws) => {
                 ws.deviceId
             );
 
-
+            broadcastToBrowsers("RESET");
+            
             return;
         }
 
