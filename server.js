@@ -587,27 +587,3 @@ function notifyAdmins(message) {
     );
 
 }
-
-
-// ============================================================
-// BROADCAST TO DEVICE
-// ============================================================
-
-function broadcastToDevice(
-    device,
-    message
-) {
-
-    if (
-        device.authorized &&
-        device.readyState ===
-            WebSocket.OPEN
-    ) {
-
-        device.send(
-            message
-        );
-
-    }
-
-}
