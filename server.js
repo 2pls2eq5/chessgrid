@@ -6,13 +6,6 @@ const { Chess } = require("chess.js");
 
 
 // ============================================================
-// CHESS STATE
-// ============================================================
-
-const chess = new Chess();
-
-
-// ============================================================
 // CONNECTION REQUESTS
 // ============================================================
 
@@ -102,8 +95,12 @@ wss.on("connection", (ws) => {
 
 
     ws.deviceId = null;
+
     ws.authorized = false;
+
     ws.isAdmin = false;
+
+    ws.game = null;
 
 
     // ========================================================
@@ -179,6 +176,7 @@ wss.on("connection", (ws) => {
 
 
             console.log();
+
             console.log(
                 "================================"
             );
@@ -255,8 +253,16 @@ wss.on("connection", (ws) => {
             );
 
 
+            // =================================================
+            // CREATE INDIVIDUAL CHESS GAME
+            // =================================================
+
             device.authorized =
                 true;
+
+
+            device.game =
+                new Chess();
 
 
             approvedConnections.set(
@@ -265,18 +271,28 @@ wss.on("connection", (ws) => {
             );
 
 
+            // =================================================
+            // TELL ESP32
+            // =================================================
+
             device.send(
                 "ACCEPTED"
             );
 
 
             device.send(
-                "FEN " + chess.fen()
+                "FEN " +
+                device.game.fen()
             );
 
 
+            // =================================================
+            // TELL ADMIN
+            // =================================================
+
             ws.send(
-                "ACCEPTED " + deviceId
+                "ACCEPTED " +
+                deviceId
             );
 
 
@@ -343,7 +359,8 @@ wss.on("connection", (ws) => {
 
 
             ws.send(
-                "REJECTED " + deviceId
+                "REJECTED " +
+                deviceId
             );
 
 
@@ -375,21 +392,49 @@ wss.on("connection", (ws) => {
 
 
         // ====================================================
+        // SAFETY
+        // ====================================================
+
+        if (
+            !ws.game
+        ) {
+
+            console.log(
+                "Authorized device has no game:",
+                ws.deviceId
+            );
+
+            return;
+        }
+
+
+        // ====================================================
         // RESET
         // ====================================================
 
-        if (message === "RESET") {
+        if (
+            message === "RESET"
+        ) {
 
-            chess.reset();
+            ws.game.reset();
 
 
-            broadcast(
+            broadcastToDevice(
+                ws,
                 "RESET"
             );
 
 
-            broadcast(
-                "FEN " + chess.fen()
+            broadcastToDevice(
+                ws,
+                "FEN " +
+                ws.game.fen()
+            );
+
+
+            console.log(
+                "Game reset:",
+                ws.deviceId
             );
 
 
@@ -398,7 +443,7 @@ wss.on("connection", (ws) => {
 
 
         // ====================================================
-        // UCI
+        // UCI MOVE
         // ====================================================
 
         if (
@@ -429,14 +474,20 @@ wss.on("connection", (ws) => {
                         : undefined;
 
 
-                chess.move({
+                // =================================================
+                // MAKE MOVE ON THIS DEVICE'S GAME
+                // =================================================
+
+                ws.game.move({
 
                     from: from,
 
                     to: to,
 
                     ...(promotion
-                        ? { promotion }
+                        ? {
+                            promotion
+                        }
                         : {})
 
                 });
@@ -444,17 +495,31 @@ wss.on("connection", (ws) => {
 
                 console.log(
                     "LEGAL:",
+                    message,
+                    "| Device:",
+                    ws.deviceId
+                );
+
+
+                // =================================================
+                // SEND NEW POSITION
+                // =================================================
+
+                broadcastToDevice(
+                    ws,
+                    "FEN " +
+                    ws.game.fen()
+                );
+
+
+                // =================================================
+                // SEND MOVE
+                // =================================================
+
+                broadcastToDevice(
+                    ws,
+                    "MOVE " +
                     message
-                );
-
-
-                broadcast(
-                    "FEN " + chess.fen()
-                );
-
-
-                broadcast(
-                    "MOVE " + message
                 );
 
 
@@ -462,20 +527,28 @@ wss.on("connection", (ws) => {
 
                 console.log(
                     "ILLEGAL:",
-                    message
+                    message,
+                    "| Device:",
+                    ws.deviceId
                 );
 
 
-                broadcast(
+                broadcastToDevice(
+                    ws,
                     "ERROR ILLEGAL " +
                     message
                 );
+
             }
 
 
             return;
         }
 
+
+        // ====================================================
+        // UNKNOWN MESSAGE
+        // ====================================================
 
         console.log(
             "Unknown message:",
@@ -512,6 +585,7 @@ wss.on("connection", (ws) => {
                 "DISCONNECTED " +
                 ws.deviceId
             );
+
         }
 
     });
@@ -529,7 +603,8 @@ function sendPendingList(ws) {
         (device, deviceId) => {
 
             ws.send(
-                "REQUEST " + deviceId
+                "REQUEST " +
+                deviceId
             );
 
         }
@@ -566,27 +641,24 @@ function notifyAdmins(message) {
 
 
 // ============================================================
-// BROADCAST
+// BROADCAST TO DEVICE
 // ============================================================
 
-function broadcast(message) {
+function broadcastToDevice(
+    device,
+    message
+) {
 
-    wss.clients.forEach(
-        (client) => {
+    if (
+        device.authorized &&
+        device.readyState ===
+            WebSocket.OPEN
+    ) {
 
-            if (
-                client.authorized &&
-                client.readyState ===
-                    WebSocket.OPEN
-            ) {
+        device.send(
+            message
+        );
 
-                client.send(
-                    message
-                );
-
-            }
-
-        }
-    );
+    }
 
 }
